@@ -1,1 +1,1 @@
-{ "expand": "gaussian" , "fmin" : 0.7}
+{ "expand":"onehot","steps": 10 , "fmin" : 0.7}
