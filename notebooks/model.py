@@ -8,16 +8,19 @@ import warnings
 from random import sample
 
 import numpy as np
-from sklearn import metrics
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
 from torch.optim.lr_scheduler import MultiStepLR
+from torch.nn.functional import l1_loss as mae
+from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data import DataLoader
 
 from sampnn.message import CompositionNet
 from sampnn.data import input_parser, CompositionData 
-from sampnn.data import collate_batch, get_data_loaders
+from sampnn.data import collate_batch
+from sampnn.data import AverageMeter, Normalizer
+
 
 args = input_parser()
 
@@ -26,15 +29,30 @@ def main():
 
     # load data
     dataset = CompositionData(*args.data_options)
-    train_loader, val_loader, test_loader = get_data_loaders(
-        dataset=dataset, batch_size=args.batch_size,
-        train_size=args.train_size, num_workers=args.workers,
-        val_size=args.val_size, test_size=args.test_size,
-        pin_memory=args.cuda)
 
+    params = {  'batch_size': args.batch_size,
+                'num_workers': args.workers, 'pin_memory': False,
+                'collate_fn': collate_batch}
 
+    total = len(dataset)
+    indices = list(range(total))
+    train_idx = int(total * args.train_size) # note int() truncates but this same as floor for +ve 
+    val_idx = int(total * args.val_size)
+    test_idx = int(total * args.test_size)
+
+    train_set, val_set, test_set = indices[:train_idx], indices[train_idx:train_idx+val_idx], indices[-test_idx:]
+
+    train_sampler = SubsetRandomSampler(train_set)
+    train_generator = DataLoader(dataset, sampler=train_sampler, **params)
+
+    val_sampler = SubsetRandomSampler(val_set)
+    val_generator = DataLoader(dataset, sampler=val_sampler, **params)
+
+    test_sampler = SubsetRandomSampler(test_set)
+    test_generator = DataLoader(dataset, sampler=test_sampler, **params)
+    
     # for large data sets we can use a subset for the normaliser
-    _, sample_target, _ = collate_batch(dataset[math.floor(len(dataset) * train_size)])
+    _, sample_target, _ = collate_batch(dataset)
     normalizer = Normalizer(sample_target)
 
     # build model
@@ -82,25 +100,40 @@ def main():
     scheduler = MultiStepLR(optimizer, milestones=args.lr_milestones,
                             gamma=0.1)
 
-    best_mae_error = validate(val_loader, model, criterion, normalizer,
+    best_mae_error = evaluate(val_generator, model, criterion, normalizer,
                                 verbose=False)
-    print(best_mae_error)
+    
+
+    train_losses = []
+    validation_losses = []
 
     for epoch in range(args.start_epoch, args.epochs):
-        # train for one epoch
-        losses, mae_errors = train(train_loader, model, criterion, optimizer, epoch, normalizer)
+        
+        # Training
+        # for local_batch, local_labels in train_generator:
+        #     # Transfer to GPU
+        #     local_batch, local_labels = local_batch.to(device), local_labels.to(device)
 
-        print('Epoch: [{0}/{1}]\t'
-                'Loss {loss.avg:.4f}\t'
-                'MAE {mae_errors.avg:.3f}'.format(
-                epoch, args.epochs, loss=losses, mae_errors=mae_errors))
+        #     # Model computations
+        #     [...]
 
-        # evaluate on validation set
-        mae_error = validate(val_loader, model, criterion, normalizer)
+        train(train_generator, model, criterion, optimizer, epoch, normalizer)
 
-        if mae_error != mae_error:
-            print('Exit due to NaN')
-            sys.exit(1)
+        # Validation
+        with torch.set_grad_enabled(False):
+            # for local_batch, local_labels in val_generator:
+            #     # Transfer to GPU
+            #     local_batch, local_labels = local_batch.to(device), local_labels.to(device)
+
+            #     # Model computations
+            #     [...]
+
+            # evaluate on validation set
+            mae_error = evaluate(val_generator, model, criterion, normalizer)
+
+            if mae_error != mae_error:
+                print('Exit due to NaN')
+                sys.exit(1)
 
         scheduler.step()
 
@@ -121,7 +154,7 @@ def main():
     print('---------Evaluate Model on Test Set---------------')
     best_checkpoint = torch.load('model_best.pth.tar')
     model.load_state_dict(best_checkpoint['state_dict'])
-    validate(test_loader, model, criterion, normalizer, test=True)
+    evaluate(test_generator, model, criterion, normalizer, test=True)
 
 
 def train(train_loader, model, criterion, optimizer, 
@@ -135,32 +168,25 @@ def train(train_loader, model, criterion, optimizer,
     # switch to train mode
     model.train()
 
-    for i, (input, target, _) in enumerate(train_loader):
+    for i, (input_, target, _) in enumerate(train_loader):
         if args.cuda:
-            input_var = (Variable(input[0].cuda(async=True)),
-                         Variable(input[1].cuda(async=True)),
-                         input[2].cuda(async=True),
-                         input[3].cuda(async=True),
-                         [atom_idx.cuda(async=True) for atom_idx in input[4]],
-                         [crys_idx.cuda(async=True) for crys_idx in input[5]])
-        else:
-            input_var = (Variable(input[0]),
-                         Variable(input[1]),
-                         input[2],
-                         input[3],
-                         input[4],
-                         input[5])
+            input_ = (input_[0].cuda(async=True),
+                         input_[1].cuda(async=True),
+                         input_[2].cuda(async=True),
+                         input_[3].cuda(async=True),
+                         [atom_idx.cuda(async=True) for atom_idx in input_[4]],
+                         [crys_idx.cuda(async=True) for crys_idx in input_[5]])
 
         # normalize target
         target_normed = normalizer.norm(target)
 
         if args.cuda:
-            target_var = Variable(target_normed.cuda(async=True))
+            target_var = target_normed.cuda(async=True)
         else:
-            target_var = Variable(target_normed)
+            target_var = target_normed
 
         # compute output
-        output = model(*input_var)
+        output = model(*input_)
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
@@ -179,10 +205,15 @@ def train(train_loader, model, criterion, optimizer,
                     'MAE {mae_errors.val:.3f}'.format(
                     i, len(train_loader), loss=losses, mae_errors=mae_errors))
 
-    return losses, mae_errors
+    print('Epoch: [{0}/{1}]\t'
+        'Loss {loss.avg:.4f}\t'
+        'MAE {mae_errors.avg:.3f}'.format(
+        epoch, args.epochs, loss=losses, mae_errors=mae_errors))
+
+    pass
     
 
-def validate(val_loader, model, criterion, normalizer, test=False, verbose=True):
+def evaluate(generator, model, criterion, normalizer, test=False, verbose=True):
 
     losses = AverageMeter()
     mae_errors = AverageMeter()
@@ -196,31 +227,24 @@ def validate(val_loader, model, criterion, normalizer, test=False, verbose=True)
     model.eval()
 
     end = time.time()
-    for i, (input, target, batch_cif_ids) in enumerate(val_loader):
+    for i, (input_, target, batch_cif_ids) in enumerate(generator):
         if args.cuda:
-            input_var = (Variable(input[0].cuda(async=True)),
-                         Variable(input[1].cuda(async=True)),
-                         input[2].cuda(async=True),
-                         input[3].cuda(async=True),
-                         [atom_idx.cuda(async=True) for atom_idx in input[4]],
-                         [crys_idx.cuda(async=True) for crys_idx in input[5]])
-        else:
-            input_var = (Variable(input[0]),
-                         Variable(input[1]),
-                         input[2],
-                         input[3],
-                         input[4],
-                         input[5])
+            input_ = (input_[0].cuda(async=True),
+                         input_[1].cuda(async=True),
+                         input_[2].cuda(async=True),
+                         input_[3].cuda(async=True),
+                         [atom_idx.cuda(async=True) for atom_idx in input_[4]],
+                         [crys_idx.cuda(async=True) for crys_idx in input_[5]])
 
         target_normed = normalizer.norm(target)
 
         if args.cuda:
-            target_var = Variable(target_normed.cuda(async=True))
+            target_var = target_normed.cuda(async=True)
         else:
-            target_var = Variable(target_normed)
+            target_var = target_normed
 
         # compute output
-        output = model(*input_var)
+        output = model(*input_)
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
@@ -250,22 +274,10 @@ def validate(val_loader, model, criterion, normalizer, test=False, verbose=True)
             writer = csv.writer(f)
             for cif_id, target, pred in zip(test_cif_ids, test_targets, test_preds):
                 writer.writerow((cif_id, target, pred))
-                                                 
-    return mae_errors.avg
-
-
-def mae(prediction, target):
-    """
-    Computes the mean absolute error between prediction and target
-
-    Parameters
-    ----------
-
-    prediction: torch.Tensor (N, 1)
-    target: torch.Tensor (N, 1)
-    """
-    return torch.mean(torch.abs(target - prediction))
-
+        pass
+    else:
+        return mae_errors.avg
+                                                
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     '''
@@ -275,44 +287,6 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
 
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-class Normalizer(object):
-    """Normalize a Tensor and restore it later. """
-    def __init__(self, tensor):
-        """tensor is taken as a sample to calculate the mean and std"""
-        self.mean = torch.mean(tensor)
-        self.std = torch.std(tensor)
-
-    def norm(self, tensor):
-        return (tensor - self.mean) / self.std
-
-    def denorm(self, normed_tensor):
-        return normed_tensor * self.std + self.mean
-
-    def state_dict(self):
-        return {'mean': self.mean,
-                'std': self.std}
-
-    def load_state_dict(self, state_dict):
-        self.mean = state_dict['mean']
-        self.std = state_dict['std']
 
 if __name__ == '__main__':
     main()
