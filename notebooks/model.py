@@ -4,7 +4,8 @@ import os
 import csv
 import shutil
 import warnings
-from random import sample
+
+from tqdm import trange
 
 import numpy as np
 import torch
@@ -18,13 +19,13 @@ from torch.utils.data import DataLoader
 from sampnn.message import CompositionNet
 from sampnn.data import input_parser, CompositionData 
 from sampnn.data import collate_batch
-from sampnn.data import AverageMeter, Normalizer
+from sampnn.data import AverageMeter, Normalizer, Logger
 
 
 args = input_parser()
 
 def main():
-    global args, best_mae_error
+    global args, best_mae
 
     device = torch.device("cuda") if args.cuda else torch.device("cpu")
 
@@ -62,6 +63,12 @@ def main():
                                 atom_fea_len=args.atom_fea_len,
                                 n_graph=args.n_conv,
                                 h_fea_list=args.h_fea_list)
+
+    num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print('Total Number of Trainable Parameters: {}'.format(num_param))
+
+    logger = Logger('./logs')
+    
     if args.cuda:
         model.cuda()
 
@@ -85,7 +92,7 @@ def main():
             print("=> loading checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
-            best_mae_error = checkpoint['best_mae_error']
+            best_mae = checkpoint['best_mae']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             normalizer.load_state_dict(checkpoint['normalizer'])
@@ -96,47 +103,55 @@ def main():
 
     # decay the learning rate multiplicatively by gamma every time a 
     # milestone is reached.
-    scheduler = MultiStepLR(optimizer, milestones=args.lr_milestones,
-                            gamma=0.1)
+    # scheduler = MultiStepLR(optimizer, milestones=args.lr_milestones,
+    #                         gamma=0.1)
 
-    best_mae_error = evaluate(val_generator, model, criterion, normalizer,
+    _, best_mae = evaluate(val_generator, model, criterion, normalizer,
                                 verbose=False)
     
+    try:
+        for epoch in range(args.start_epoch, args.epochs):
+            # Training
+            model.train()
+            train_loss, train_mae = train(train_generator, model, criterion, optimizer, normalizer)
 
-    train_losses = []
-    validation_losses = []
+            # Validation
+            with torch.set_grad_enabled(False):
+                # switch to evaluate mode
+                model.eval()
+                # evaluate on validation set
+                val_loss, val_mae = evaluate(val_generator, model, criterion, normalizer)
 
-    for epoch in range(args.start_epoch, args.epochs):
-        
-        # Training
-        model.train()
-        train(train_generator, model, criterion, optimizer, epoch, normalizer)
+            print('Epoch: [{0}/{1}]\t'
+                    'Train : Loss {loss.avg:.4f}\t'
+                    'MAE {mae_errors.avg:.3f}\t'
+                    'Validation : Loss {val_loss.avg:.4f}\t'
+                    'MAE {val_mae.avg:.3f}\n'.format(
+                    epoch+1, args.epochs, loss=train_loss, mae_errors=train_mae,
+                    val_loss=val_loss, val_mae=val_mae))
 
-        # Validation
-        with torch.set_grad_enabled(False):
-            # switch to evaluate mode
-            model.eval()
-            # evaluate on validation set
-            mae_error = evaluate(val_generator, model, criterion, normalizer)
+            # scheduler.step()
 
-            if mae_error != mae_error:
-                print('Exit due to NaN')
-                sys.exit(1)
+            is_best = val_mae.avg < best_mae.avg
+            if is_best:
+                best_mae = val_mae
 
-        scheduler.step()
+            save_checkpoint({
+                    'epoch': epoch + 1,
+                    'state_dict': model.state_dict(),
+                    'best_mae': best_mae.avg,
+                    'optimizer': optimizer.state_dict(),
+                    'normalizer': normalizer.state_dict(),
+                    'args': vars(args)
+                }, is_best)
 
-        # remember the best mae_eror and save checkpoint
-        is_best = mae_error < best_mae_error
-        best_mae_error = min(mae_error, best_mae_error)
+            info = { 'Train MAE': train_mae.avg, 'Validation MAE': val_mae.avg }
 
-        save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
-                'best_mae_error': best_mae_error,
-                'optimizer': optimizer.state_dict(),
-                'normalizer': normalizer.state_dict(),
-                'args': vars(args)
-            }, is_best)
+            for tag, value in info.items():
+                logger.scalar_summary(tag, value, epoch+1)
+
+    except KeyboardInterrupt:
+        pass
 
     # test best model
     print('---------Evaluate Model on Test Set---------------')
@@ -146,53 +161,46 @@ def main():
 
 
 def train(train_loader, model, criterion, optimizer, 
-            epoch, normalizer, verbose = False):
+          normalizer, verbose = False):
     """
     run a forward pass, backwards pass and then update weights
     """
     losses = AverageMeter()
     mae_errors = AverageMeter()
 
-    for i, (input_, target, _) in enumerate(train_loader):
-        
-        # normalize target
-        target_var = normalizer.norm(target)
-        
-        if args.cuda:
-            input_ = (input_[0].cuda(async=True),
-                        input_[1].cuda(async=True),
-                        input_[2].cuda(async=True),
-                        input_[3].cuda(async=True),
-                        input_[4].cuda(async=True),
-                        input_[5].cuda(async=True))
-            target_var = target_var.cuda(async=True)
+    with trange(len(train_loader)) as t:
+        for i, (input_, target, _) in enumerate(train_loader):
+            
+            # normalize target
+            target_var = normalizer.norm(target)
+            
+            if args.cuda:
+                input_ = (input_[0].cuda(async=True),
+                            input_[1].cuda(async=True),
+                            input_[2].cuda(async=True),
+                            input_[3].cuda(async=True),
+                            input_[4].cuda(async=True),
+                            input_[5].cuda(async=True))
+                target_var = target_var.cuda(async=True)
 
-        # compute output
-        output = model(*input_)
-        loss = criterion(output, target_var)
+            # compute output
+            output = model(*input_)
+            loss = criterion(output, target_var)
 
-        # measure accuracy and record loss
-        mae_error = mae(normalizer.denorm(output.data.cpu()), target)
-        losses.update(loss.data.cpu().item(), target.size(0))
-        mae_errors.update(mae_error, target.size(0))
+            # measure accuracy and record loss
+            mae_error = mae(normalizer.denorm(output.data.cpu()), target)
+            losses.update(loss.data.cpu().item(), target.size(0))
+            mae_errors.update(mae_error, target.size(0))
 
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            # compute gradient and do SGD step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        if verbose:
-            print('Batch: [{0}/{1}]\t'
-                    'Loss {loss.val:.4f}\t'
-                    'MAE {mae_errors.val:.3f}'.format(
-                    i, len(train_loader), loss=losses, mae_errors=mae_errors))
+            t.set_postfix(loss=losses.avg)
+            t.update()
 
-    print('Epoch: [{0}/{1}]\t'
-        'Loss {loss.avg:.4f}\t'
-        'MAE {mae_errors.avg:.3f}'.format(
-        epoch, args.epochs, loss=losses, mae_errors=mae_errors))
-
-    pass
+    return losses, mae_errors
     
 
 def evaluate(generator, model, criterion, normalizer, 
@@ -223,7 +231,7 @@ def evaluate(generator, model, criterion, normalizer,
                         input_[3].cuda(async=True),
                         input_[4].cuda(async=True),
                         input_[5].cuda(async=True))
-            target_var = target_normed.cuda(async=True)
+            target_var = target_var.cuda(async=True)
 
         # compute output
         output = model(*input_)
@@ -238,7 +246,7 @@ def evaluate(generator, model, criterion, normalizer,
             print('{0}: [{1}/{2}]\t'
                     'Loss {loss.val:.4f}\t'
                     'MAE {mae_errors.val:.3f}'.format(label,
-                    i, len(train_loader), loss=losses, mae_errors=mae_errors))
+                    i, len(generator), loss=losses, mae_errors=mae_errors))
 
         if test:
             test_pred = normalizer.denorm(output.data.cpu())
@@ -247,19 +255,18 @@ def evaluate(generator, model, criterion, normalizer,
             test_targets += test_target.view(-1).tolist()
             test_cif_ids += batch_cif_ids
 
-    print('{0}: \t'
-        'Loss {loss.avg:.4f}\t'
-        'MAE {mae_errors.avg:.3f}\n'.format(
-        label, loss=losses, mae_errors=mae_errors))
-
     if test:  
         with open('test_results.csv', 'w') as f:
             writer = csv.writer(f)
             for cif_id, target, pred in zip(test_cif_ids, test_targets, test_preds):
                 writer.writerow((cif_id, target, pred))
+
+        print('Test : Loss {loss.avg:.4f}\t'
+                    'MAE {mae.avg:.3f}\n'.format(loss=losses, mae=mae_errors))
+
         pass
     else:
-        return mae_errors.avg
+        return losses, mae_errors
                                                 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
