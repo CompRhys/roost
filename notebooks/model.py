@@ -3,7 +3,6 @@ import sys
 import os
 import csv
 import shutil
-import time
 import warnings
 from random import sample
 
@@ -27,29 +26,29 @@ args = input_parser()
 def main():
     global args, best_mae_error
 
+    device = torch.device("cuda") if args.cuda else torch.device("cpu")
+
     # load data
     dataset = CompositionData(*args.data_options)
 
     params = {  'batch_size': args.batch_size,
-                'num_workers': args.workers, 'pin_memory': False,
+                'num_workers': args.workers, 
+                'pin_memory': False,
+                'shuffle':True,
                 'collate_fn': collate_batch}
 
     total = len(dataset)
     indices = list(range(total))
     train_idx = int(total * args.train_size) # note int() truncates but this same as floor for +ve 
     val_idx = int(total * args.val_size)
-    test_idx = int(total * args.test_size)
+    test_idx = total - train_idx - val_idx
 
-    train_set, val_set, test_set = indices[:train_idx], indices[train_idx:train_idx+val_idx], indices[-test_idx:]
+    train_set, val_set, test_set = torch.utils.data.random_split(dataset, [train_idx, val_idx, test_idx])
 
-    train_sampler = SubsetRandomSampler(train_set)
-    train_generator = DataLoader(dataset, sampler=train_sampler, **params)
+    train_generator = DataLoader(train_set, **params)
+    val_generator = DataLoader(val_set, **params)
+    test_generator = DataLoader(test_set, **params)
 
-    val_sampler = SubsetRandomSampler(val_set)
-    val_generator = DataLoader(dataset, sampler=val_sampler, **params)
-
-    test_sampler = SubsetRandomSampler(test_set)
-    test_generator = DataLoader(dataset, sampler=test_sampler, **params)
     
     # for large data sets we can use a subset for the normaliser
     _, sample_target, _ = collate_batch(dataset)
@@ -110,24 +109,13 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         
         # Training
-        # for local_batch, local_labels in train_generator:
-        #     # Transfer to GPU
-        #     local_batch, local_labels = local_batch.to(device), local_labels.to(device)
-
-        #     # Model computations
-        #     [...]
-
+        model.train()
         train(train_generator, model, criterion, optimizer, epoch, normalizer)
 
         # Validation
         with torch.set_grad_enabled(False):
-            # for local_batch, local_labels in val_generator:
-            #     # Transfer to GPU
-            #     local_batch, local_labels = local_batch.to(device), local_labels.to(device)
-
-            #     # Model computations
-            #     [...]
-
+            # switch to evaluate mode
+            model.eval()
             # evaluate on validation set
             mae_error = evaluate(val_generator, model, criterion, normalizer)
 
@@ -165,25 +153,19 @@ def train(train_loader, model, criterion, optimizer,
     losses = AverageMeter()
     mae_errors = AverageMeter()
 
-    # switch to train mode
-    model.train()
-
     for i, (input_, target, _) in enumerate(train_loader):
+        
+        # normalize target
+        target_var = normalizer.norm(target)
+        
         if args.cuda:
             input_ = (input_[0].cuda(async=True),
-                         input_[1].cuda(async=True),
-                         input_[2].cuda(async=True),
-                         input_[3].cuda(async=True),
-                         [atom_idx.cuda(async=True) for atom_idx in input_[4]],
-                         [crys_idx.cuda(async=True) for crys_idx in input_[5]])
-
-        # normalize target
-        target_normed = normalizer.norm(target)
-
-        if args.cuda:
-            target_var = target_normed.cuda(async=True)
-        else:
-            target_var = target_normed
+                        input_[1].cuda(async=True),
+                        input_[2].cuda(async=True),
+                        input_[3].cuda(async=True),
+                        input_[4].cuda(async=True),
+                        input_[5].cuda(async=True))
+            target_var = target_var.cuda(async=True)
 
         # compute output
         output = model(*input_)
@@ -213,8 +195,9 @@ def train(train_loader, model, criterion, optimizer,
     pass
     
 
-def evaluate(generator, model, criterion, normalizer, test=False, verbose=True):
-
+def evaluate(generator, model, criterion, normalizer, 
+                test=False, verbose=False):
+    """ evaluate the model """
     losses = AverageMeter()
     mae_errors = AverageMeter()
 
@@ -223,25 +206,24 @@ def evaluate(generator, model, criterion, normalizer, test=False, verbose=True):
         test_preds = []
         test_cif_ids = []
 
-    # switch to evaluate mode
-    model.eval()
+    if test:
+       label = 'Test'
+    else:
+        label = 'Validate'
 
-    end = time.time()
     for i, (input_, target, batch_cif_ids) in enumerate(generator):
+        
+        # normalize target
+        target_var = normalizer.norm(target)
+        
         if args.cuda:
             input_ = (input_[0].cuda(async=True),
-                         input_[1].cuda(async=True),
-                         input_[2].cuda(async=True),
-                         input_[3].cuda(async=True),
-                         [atom_idx.cuda(async=True) for atom_idx in input_[4]],
-                         [crys_idx.cuda(async=True) for crys_idx in input_[5]])
-
-        target_normed = normalizer.norm(target)
-
-        if args.cuda:
+                        input_[1].cuda(async=True),
+                        input_[2].cuda(async=True),
+                        input_[3].cuda(async=True),
+                        input_[4].cuda(async=True),
+                        input_[5].cuda(async=True))
             target_var = target_normed.cuda(async=True)
-        else:
-            target_var = target_normed
 
         # compute output
         output = model(*input_)
@@ -251,6 +233,13 @@ def evaluate(generator, model, criterion, normalizer, test=False, verbose=True):
         mae_error = mae(normalizer.denorm(output.data.cpu()), target)
         losses.update(loss.data.cpu().item(), target.size(0))
         mae_errors.update(mae_error, target.size(0))
+
+        if verbose:
+            print('{0}: [{1}/{2}]\t'
+                    'Loss {loss.val:.4f}\t'
+                    'MAE {mae_errors.val:.3f}'.format(label,
+                    i, len(train_loader), loss=losses, mae_errors=mae_errors))
+
         if test:
             test_pred = normalizer.denorm(output.data.cpu())
             test_target = target
@@ -258,16 +247,10 @@ def evaluate(generator, model, criterion, normalizer, test=False, verbose=True):
             test_targets += test_target.view(-1).tolist()
             test_cif_ids += batch_cif_ids
 
-    if test:
-       label = 'Test'
-    else:
-        label = 'Validate'
-
-    if verbose:
-        print('{0}: \t'
-            'Loss {loss.avg:.4f}\t'
-            'MAE {mae_errors.avg:.3f}\n'.format(
-            label, loss=losses, mae_errors=mae_errors))
+    print('{0}: \t'
+        'Loss {loss.avg:.4f}\t'
+        'MAE {mae_errors.avg:.3f}\n'.format(
+        label, loss=losses, mae_errors=mae_errors))
 
     if test:  
         with open('test_results.csv', 'w') as f:
