@@ -15,11 +15,12 @@ from torch.optim.lr_scheduler import MultiStepLR
 from torch.nn.functional import l1_loss as mae
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import DataLoader
+from tensorboardX import SummaryWriter
 
 from sampnn.message import CompositionNet
 from sampnn.data import input_parser, CompositionData 
 from sampnn.data import collate_batch
-from sampnn.data import AverageMeter, Normalizer, Logger
+from sampnn.data import AverageMeter, Normalizer
 
 
 args = input_parser()
@@ -67,7 +68,7 @@ def main():
     num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print('Total Number of Trainable Parameters: {}'.format(num_param))
 
-    logger = Logger('./logs')
+    writer = SummaryWriter()
     
     if args.cuda:
         model.cuda()
@@ -145,10 +146,14 @@ def main():
                     'args': vars(args)
                 }, is_best)
 
-            info = { 'Train MAE': train_mae.avg, 'Validation MAE': val_mae.avg }
 
-            for tag, value in info.items():
-                logger.scalar_summary(tag, value, epoch+1)
+            writer.add_scalar('data/train', train_mae.avg, epoch+1)
+            writer.add_scalar('data/validation', val_mae.avg, epoch+1)
+
+            if epoch % 25 == 0:
+                for name, param in model.named_parameters():
+                    writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch+1)
+                    writer.add_histogram(name+'/grad', param.grad.clone().cpu().data.numpy(), epoch+1)
 
     except KeyboardInterrupt:
         pass
@@ -179,8 +184,7 @@ def train(train_loader, model, criterion, optimizer,
                             input_[1].cuda(async=True),
                             input_[2].cuda(async=True),
                             input_[3].cuda(async=True),
-                            input_[4].cuda(async=True),
-                            input_[5].cuda(async=True))
+                            input_[4].cuda(async=True))
                 target_var = target_var.cuda(async=True)
 
             # compute output
@@ -229,8 +233,7 @@ def evaluate(generator, model, criterion, normalizer,
                         input_[1].cuda(async=True),
                         input_[2].cuda(async=True),
                         input_[3].cuda(async=True),
-                        input_[4].cuda(async=True),
-                        input_[5].cuda(async=True))
+                        input_[4].cuda(async=True))
             target_var = target_var.cuda(async=True)
 
         # compute output
