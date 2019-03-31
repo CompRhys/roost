@@ -58,8 +58,8 @@ def main():
 
     # build model
     structures, _, _ = dataset[0]
-    orig_atom_fea_len = structures[0].shape[-1]
-    nbr_fea_len = structures[1].shape[-1]
+    orig_atom_fea_len = structures[1].shape[-1]
+    nbr_fea_len = structures[2].shape[-1]
     model = CompositionNet(orig_atom_fea_len, nbr_fea_len,
                                 atom_fea_len=args.atom_fea_len,
                                 n_graph=args.n_conv,
@@ -104,8 +104,8 @@ def main():
 
     # decay the learning rate multiplicatively by gamma every time a 
     # milestone is reached.
-    # scheduler = MultiStepLR(optimizer, milestones=args.lr_milestones,
-    #                         gamma=0.1)
+    scheduler = MultiStepLR(optimizer, milestones=args.lr_milestones,
+                            gamma=0.5)
 
     _, best_mae = evaluate(val_generator, model, criterion, normalizer,
                                 verbose=False)
@@ -131,7 +131,7 @@ def main():
                     epoch+1, args.epochs, loss=train_loss, mae_errors=train_mae,
                     val_loss=val_loss, val_mae=val_mae))
 
-            # scheduler.step()
+            scheduler.step()
 
             is_best = val_mae.avg < best_mae.avg
             if is_best:
@@ -153,7 +153,7 @@ def main():
             if epoch % 25 == 0:
                 for name, param in model.named_parameters():
                     writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch+1)
-                    writer.add_histogram(name+'/grad', param.grad.clone().cpu().data.numpy(), epoch+1)
+                    # writer.add_histogram(name+'/grad', param.grad.clone().cpu().data.numpy(), epoch+1)
 
     except KeyboardInterrupt:
         pass
@@ -161,6 +161,7 @@ def main():
     # test best model
     print('---------Evaluate Model on Test Set---------------')
     best_checkpoint = torch.load('model_best.pth.tar')
+    print(best_checkpoint['epoch'])
     model.load_state_dict(best_checkpoint['state_dict'])
     evaluate(test_generator, model, criterion, normalizer, test=True)
 
@@ -184,7 +185,8 @@ def train(train_loader, model, criterion, optimizer,
                             input_[1].cuda(async=True),
                             input_[2].cuda(async=True),
                             input_[3].cuda(async=True),
-                            input_[4].cuda(async=True))
+                            input_[4].cuda(async=True),
+                            input_[5].cuda(async=True))
                 target_var = target_var.cuda(async=True)
 
             # compute output
@@ -233,7 +235,8 @@ def evaluate(generator, model, criterion, normalizer,
                         input_[1].cuda(async=True),
                         input_[2].cuda(async=True),
                         input_[3].cuda(async=True),
-                        input_[4].cuda(async=True))
+                        input_[4].cuda(async=True),
+                        input_[5].cuda(async=True))
             target_var = target_var.cuda(async=True)
 
         # compute output
