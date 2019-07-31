@@ -16,6 +16,16 @@ The following paper describes the details of the MEGnet framework, the embedding
 
 This is an experimental NLP embedding based on the data mining of definite compositions and structure prototypes.
 
-[The relevant work is yet to be published, See MatMiner](https://hackingmaterials.github.io/matminer/matminer.utils.html?highlight=matscholar#matminer.utils.data.MatscholarElementData)
+[Unsupervised word embeddings capture latent knowledge from materials science literature](https://www.nature.com/articles/s41586-019-1335-8)
+
+## Onehot
+
+This is a simple one-hot encoding for the elements
+
+## Elem
+
+These a selection of normalised atomic properties collated from various sources.
+
+
 
 
