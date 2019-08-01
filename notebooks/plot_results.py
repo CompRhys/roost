@@ -24,13 +24,14 @@ def error_curve(y_test, y_pred, y_std):
     for j in range(y_test.size, 0, -1):
         less_y_std = y_std_sort[:j]
         less_err = se_sort[:j]
+        foo =np.sqrt(mse(y_pred[less_y_std], y_test[less_y_std]))
         err.append(np.sqrt(mse(y_pred[less_y_std], y_test[less_y_std])))
         err_true.append(np.sqrt(mse(y_pred[less_err], y_test[less_err])))
 
     err=np.array(err)
     err_true=np.array(err_true)    
 
-    plt.figure(figsize=(16,7))
+    plt.figure(figsize=(10,10))
     plt.plot(err, label = "Removing Most Uncertain")
     plt.plot(err_true, label = "Removing Largest Error")
     plt.xlabel('Points Removed')
@@ -39,17 +40,16 @@ def error_curve(y_test, y_pred, y_std):
 
 
 #%%
-data = np.loadtxt("/home/rhys/PhD/sampnn/test_results.csv", delimiter=",")
-# y_test, y_pred, y_std = data[:,1], data[:,2], data[:,3]
-y_test, y_pred = data[:,1], data[:,2]
+import pandas as pd
+data = pd.read_csv("/home/reag2/PhD/sampnn/test_results.csv", index_col=0)
+y_test, y_pred, y_std = data["target"].values, data["mean"].values, \
+                        data["std"].values
 
 print("R2 Score: {:.4f}".format(r2_score(y_test,y_pred)))
 print("RMSE:     {:.5f}".format(np.sqrt(mse(y_test,y_pred))))
 print("MAE:     {:.5f}".format(mae(y_test,y_pred)))
 
-pred_test_curve(y_test, y_pred)    
-# y_std = np.zeros_like(y_pred)
-# pred_test_curve(y_test, y_pred, y_std)    
-# error_curve(y_test, y_pred, y_std)
+pred_test_curve(y_test, y_pred, y_std)  
+error_curve(y_test, y_pred, y_std)
 
 #%%
