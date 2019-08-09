@@ -58,3 +58,6 @@ print("MAE:     {:.5f}".format(mae(y_test, y_pred)))
 
 pred_test_curve(y_test, y_pred, y_std)
 error_curve(y_test, y_pred, y_std)
+
+
+#%%
