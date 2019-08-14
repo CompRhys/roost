@@ -12,7 +12,7 @@ import pandas as pd
 
 
 def pred_test_curve(y_test, y_pred, y_std=None):
-    plt.figure(figsize=(16, 7))
+    plt.figure(figsize=(10, 10))
     plt.errorbar(y_test, y_pred, yerr=y_std, fmt='x', elinewidth=0.4)
     min_ = np.min((y_test, y_pred))
     max_ = np.max((y_test, y_pred))
@@ -35,6 +35,8 @@ def error_curve(y_test, y_pred, y_std):
         err.append(np.sqrt(mse(y_pred[less_y_std], y_test[less_y_std])))
         err_true.append(np.sqrt(mse(y_pred[less_err], y_test[less_err])))
 
+    err.append(0)
+    err_true.append(0)
     err = np.array(err)
     err_true = np.array(err_true)
 
@@ -48,7 +50,7 @@ def error_curve(y_test, y_pred, y_std):
 
 #%%
 # Load and Plot results
-data = pd.read_csv("/home/reag2/PhD/sampnn/test_results.csv", index_col=0)
+data = pd.read_csv("/home/reag2/PhD/sampnn/ensemble_results_3.csv", index_col=0)
 y_test, y_pred, y_std = data["target"].values, data["mean"].values, \
                         data["std"].values
 
