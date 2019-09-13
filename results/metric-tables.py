@@ -4,6 +4,7 @@
 import pandas as pd
 import numpy as np
 import copy
+from sklearn.metrics import r2_score
 from scipy.stats import spearmanr, pearsonr, kendalltau
 from dcor import distance_correlation
 
@@ -82,7 +83,7 @@ def residual_correlations(y_test, y_pred, y_std, verbose=False):
 
 #%%
 # Evaluate metrics MPNN
-df = pd.read_csv("results/ensemble_results_f-4_s-0_t-1.csv".format(i))
+df = pd.read_csv("results/ensemble_results_f-5_s-0_t-1.csv")
 
 tar = df["target"].to_numpy()
 
@@ -104,7 +105,7 @@ _ = residual_correlations(tar, mean, both, verbose=True)
 #%%
 # Evaluate Metrics RF
 
-df = pd.read_csv("results/mp_results.csv".format(i))
+df = pd.read_csv("results/expt_results.csv")
 
 y_test = df["target"]
 y_pred = df["mean"]
@@ -112,3 +113,5 @@ y_std = df["std"]
 
 _ = error_metrics(y_test, y_pred, verbose=True)
 _ = residual_correlations(y_test, y_pred, y_std, verbose=True)
+
+#%%

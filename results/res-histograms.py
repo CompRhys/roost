@@ -12,11 +12,14 @@ oqmd = pd.read_csv("results/ensemble_results_f-1_s-0_t-1.csv")
 mp = pd.read_csv("results/ensemble_results_f-2_s-0_t-1.csv")
 expt = pd.read_csv("results/ensemble_results_f-3_s-0_t-1.csv")
 xfer = pd.read_csv("results/ensemble_results_f-4_s-0_t-1.csv")
+# xfer = pd.read_csv("results/ensemble_results_f-5_s-0_t-1.csv")
+
+df_list = [oqmd, mp, expt, xfer]
 
 title_list = ["OQMD",
               "MP",
-              "Expt",
-              "Transfer"]
+              "EX",
+              "MP \ then \ EX"]
 
 #%%
 # Plot the curves
