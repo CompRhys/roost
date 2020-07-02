@@ -12,6 +12,3 @@
 
 [Predicting the Band Gaps of Inorganic Solids by Machine Learning](https://doi.org/10.1021/acs.jpclett.8b00124)
 
-## High Entropy Alloys
-
-[Database on the mechanical properties of high entropy alloys and complex concentrated alloys](https://doi.org/10.1016/j.dib.2018.11.111)
