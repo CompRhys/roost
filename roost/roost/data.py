@@ -29,10 +29,6 @@ class CompositionData(Dataset):
         self.elem_emb_len = self.elem_features.embedding_size()
         self.task = task
         if self.task == "regression":
-            if self.df.shape[1] - 2 != 1:
-                raise NotImplementedError(
-                    "Multi-target regression currently not supported"
-                )
             self.n_targets = 1
         elif self.task == "classification":
             if self.df.shape[1] - 2 != 1:
@@ -64,7 +60,7 @@ class CompositionData(Dataset):
         cry_id: torch.Tensor shape (1,)
             input id for the material
         """
-        cry_id, composition, target = self.df.iloc[idx]
+        cry_id, composition, target, *rest = self.df.iloc[idx]
         elements, weights = parse_roost(composition)
         weights = np.atleast_2d(weights).T / np.sum(weights)
         assert len(elements) != 1, f"cry-id {cry_id} [{composition}] is a pure system"
@@ -100,7 +96,7 @@ class CompositionData(Dataset):
             targets = torch.LongTensor([target])
 
         return (
-            (atom_weights, atom_fea, self_fea_idx, nbr_fea_idx),
+            (atom_weights, atom_fea, self_fea_idx, nbr_fea_idx, *rest),
             targets,
             composition,
             cry_id,
@@ -152,10 +148,11 @@ def collate_batch(dataset_list):
     batch_target = []
     batch_comp = []
     batch_cry_ids = []
+    batch_rest = []
 
     cry_base_idx = 0
-    for i, (inputs, target, comp, cry_id) in enumerate(dataset_list):
-        atom_weights, atom_fea, self_fea_idx, nbr_fea_idx = inputs
+    for idx, (inputs, target, comp, cry_id) in enumerate(dataset_list):
+        atom_weights, atom_fea, self_fea_idx, nbr_fea_idx, *rest = inputs
         # number of atoms for this crystal
         n_i = atom_fea.shape[0]
 
@@ -168,12 +165,13 @@ def collate_batch(dataset_list):
         batch_nbr_fea_idx.append(nbr_fea_idx + cry_base_idx)
 
         # mapping from atoms to crystals
-        crystal_atom_idx.append(torch.tensor([i] * n_i))
+        crystal_atom_idx.append(torch.tensor([idx] * n_i))
 
         # batch the targets and ids
         batch_target.append(target)
         batch_comp.append(comp)
         batch_cry_ids.append(cry_id)
+        batch_rest.append(rest)
 
         # increment the id counter
         cry_base_idx += n_i
@@ -185,6 +183,7 @@ def collate_batch(dataset_list):
             torch.cat(batch_self_fea_idx, dim=0),
             torch.cat(batch_nbr_fea_idx, dim=0),
             torch.cat(crystal_atom_idx),
+            torch.tensor(batch_rest, dtype=torch.float).T,
         ),
         torch.stack(batch_target, dim=0),
         batch_comp,

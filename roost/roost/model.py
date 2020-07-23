@@ -23,6 +23,7 @@ class Roost(BaseModelClass):
         n_targets,
         elem_emb_len,
         elem_fea_len=64,
+        non_elem_fea_len=0,
         n_graph=3,
         elem_heads=3,
         elem_gate=[256],
@@ -55,6 +56,7 @@ class Roost(BaseModelClass):
                 "robust": robust,
                 "n_targets": n_targets,
                 "out_hidden": out_hidden,
+                "non_elem_fea_len": non_elem_fea_len,
             }
         )
 
@@ -66,15 +68,12 @@ class Roost(BaseModelClass):
         else:
             output_dim = n_targets
 
-        self.output_nn = ResidualNetwork(elem_fea_len, output_dim, out_hidden)
+        self.output_nn = ResidualNetwork(
+            elem_fea_len + non_elem_fea_len, output_dim, out_hidden
+        )
 
     def forward(
-        self,
-        elem_weights,
-        elem_fea,
-        self_fea_idx,
-        nbr_fea_idx,
-        cry_elem_idx
+        self, elem_weights, elem_fea, self_fea_idx, nbr_fea_idx, cry_elem_idx, *rest
     ):
         """
         Forward pass through the material_nn and output_nn
@@ -83,8 +82,11 @@ class Roost(BaseModelClass):
             elem_weights, elem_fea, self_fea_idx, nbr_fea_idx, cry_elem_idx
         )
 
+        # combine learned with rest features
+        all_features = torch.cat((crys_fea.T, *rest)).T
+
         # apply neural network to map from learned features to target
-        return self.output_nn(crys_fea)
+        return self.output_nn(all_features)
 
     def __repr__(self):
         return self.__class__.__name__
