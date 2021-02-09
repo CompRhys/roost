@@ -22,10 +22,5 @@ This is an experimental NLP embedding based on the data mining of definite compo
 
 This is a simple one-hot encoding for the elements
 
-## Elem
-
-These a selection of normalised atomic properties collated from various sources.
-
-
 
 
