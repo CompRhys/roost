@@ -296,7 +296,6 @@ def train_ensemble(
                     optimizer=None,
                     normalizer_dict=normalizer_dict,
                     action="val",
-                    verbose=True,
                 )
 
                 val_score = {}
@@ -618,5 +617,5 @@ def save_results_dict(idx, comp, results_dict, model_name):
 
     df.to_csv(
         index=False,
-        path_or_buf=(f"results/multi_results_{model_name}.csv")
+        path_or_buf=(f"results/{model_name}.csv")
     )
