@@ -297,7 +297,6 @@ def train_ensemble(
                     optimizer=None,
                     normalizer_dict=normalizer_dict,
                     action="val",
-                    verbose=True,
                 )
 
                 val_score = {}
