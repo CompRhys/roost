@@ -79,7 +79,6 @@ class BaseModelClass(nn.Module, ABC):
                     optimizer=optimizer,
                     normalizer_dict=normalizer_dict,
                     action="train",
-                    verbose=verbose,
                 )
 
                 if writer is not None:
@@ -194,8 +193,7 @@ class BaseModelClass(nn.Module, ABC):
         criterion_dict,
         optimizer,
         normalizer_dict,
-        action="train",
-        verbose=False
+        action="train"
     ):
         """
         evaluate the model
@@ -215,7 +213,8 @@ class BaseModelClass(nn.Module, ABC):
         }
 
         # we do not need batch_comp or batch_ids when training
-        for inputs, targets, *_ in tqdm(generator, disable=not verbose):
+        # disable output in non-tty (e.g. log files) https://git.io/JnBOi
+        for inputs, targets, *_ in tqdm(generator, disable=None):
 
             # move tensors to GPU
             inputs = (tensor.to(self.device) for tensor in inputs)
@@ -310,7 +309,7 @@ class BaseModelClass(nn.Module, ABC):
         return metrics
 
     @torch.no_grad()
-    def predict(self, generator, verbose=False):
+    def predict(self, generator):
         """
         evaluate the model
         """
@@ -322,7 +321,8 @@ class BaseModelClass(nn.Module, ABC):
         # Ensure model is in evaluation mode
         self.eval()
 
-        for input_, targets, batch_comp, batch_ids in tqdm(generator, disable=not verbose):
+        # disable output in non-tty (e.g. log files) https://git.io/JnBOi
+        for input_, targets, batch_comp, batch_ids in tqdm(generator, disable=None):
 
             # move tensors to device (GPU or CPU)
             input_ = (tensor.to(self.device) for tensor in input_)
