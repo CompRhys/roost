@@ -194,49 +194,16 @@ class CrystalGraphData(Dataset):
             [np.sum([self.ari.get_fea(el)*amt for el, amt in site.items()], axis=0) for site in site_atoms]
         )
 
-        # select atleast one site in the crystal to mask
-        mask_ids = np.sort(np.random.choice(
-            np.arange(crystal.num_sites, dtype=int), max(1, int(self.p_mask * crystal.num_sites))
-        ))
-
-        # get the mask labels via use of a OHE of elements to handle disordered structures
-        mask_labels = np.vstack(
-            [np.sum([self.ohe.get_fea(el)*amt for el, amt in site_atoms[idx].items()], axis=0) for idx in mask_ids]
-        )
-
-        # TODO currently 20% no mask -> 10% no mask, 10% random mask
-        mask_filter = np.random.rand(len(mask_ids))
-        atom_fea[mask_ids[np.where(mask_filter < self.p_zero)], :] = 0
-        # atom_fea[:, :] = 0
-
-
-        # TODO mask distances
-
-        # print(atom_fea)
-        # exit()
-
-        # # # neighbours
-        # self_idx, nbr_idx, nbr_dist = self._get_nbr_data(crystal)
-
-        # assert len(self_idx), f"All atoms in {cif_id} are isolated"
-        # assert len(nbr_idx), f"This should not be triggered but was for {cif_id}"
-        # assert set(self_idx) == set(range(crystal.num_sites)), f"At least one atom in {cif_id} is isolated"
-
-        # nbr_dist = self.gdf.expand(nbr_dist)
-
         atom_fea = torch.Tensor(atom_fea)
-        mask_ids = torch.LongTensor(mask_ids)
 
         targets = []
         for target in self.task_dict:
-            if self.task_dict[target] == "mask":
-                targets.append(torch.Tensor(mask_labels))
-            elif self.task_dict[target] == "regression":
-                targets.append(torch.Tensor([[df_idx["e_form"],],]))
+            if self.task_dict[target] == "regression":
+                targets.append(torch.Tensor([[df_idx[target],],]))
             else:
                 raise NotImplementedError("bad user")
 
-        return ((atom_fea, nbr_dist, self_idx, nbr_idx, mask_ids), targets, comp, cif_id)
+        return ((atom_fea, nbr_dist, self_idx, nbr_idx), targets, comp, cif_id)
 
 
 class GaussianDistance(object):
@@ -327,14 +294,13 @@ def collate_batch(dataset_list):
     base_idx = 0
 
     for i, (inputs, target, comp, cif_id) in enumerate(dataset_list):
-        atom_fea, nbr_dist, self_idx, nbr_idx, mask_idx = inputs
+        atom_fea, nbr_dist, self_idx, nbr_idx = inputs
         n_atoms = atom_fea.shape[0]  # number of atoms for this crystal
 
         batch_atom_fea.append(atom_fea)
         batch_nbr_dist.append(nbr_dist)
         batch_self_idx.append(self_idx + base_idx)
         batch_nbr_idx.append(nbr_idx + base_idx)
-        batch_mask_idx.append(mask_idx + base_idx)
 
         crystal_atom_idx.extend([i] * n_atoms)
 
@@ -348,12 +314,11 @@ def collate_batch(dataset_list):
     nbr_dist = torch.cat(batch_nbr_dist, dim=0)
     self_idx = torch.cat(batch_self_idx, dim=0)
     nbr_idx = torch.cat(batch_nbr_idx, dim=0)
-    mask_idx = torch.cat(batch_mask_idx, dim=0)
 
     cry_idx = torch.LongTensor(crystal_atom_idx)
 
     return (
-        (atom_fea, nbr_dist, self_idx, nbr_idx, mask_idx, cry_idx),
+        (atom_fea, nbr_dist, self_idx, nbr_idx, cry_idx),
         tuple(torch.cat(b_target, dim=0) for b_target in zip(*batch_targets)),
         batch_comps,
         batch_cif_ids,

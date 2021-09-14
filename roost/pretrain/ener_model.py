@@ -3,7 +3,7 @@ import torch.nn as nn
 from roost.core import BaseModelClass
 from roost.cgcnn.model import DescriptorNetwork
 
-# from roost.segments import MeanPooling
+from roost.segments import MeanPooling
 
 class CrystalGraphPreNet(BaseModelClass):
     """
@@ -63,15 +63,12 @@ class CrystalGraphPreNet(BaseModelClass):
             }
         )
 
-        self.node_linear = nn.Linear(elem_fea_len, n_targets[0])
-
-        # self.global_pool = MeanPooling()
-        # # self.global_linear = nn.Linear(elem_fea_len, n_targets[1])
-        # self.global_linear = nn.Linear(elem_fea_len, n_targets[0])
+        self.global_pool = MeanPooling()
+        self.global_linear = nn.Linear(elem_fea_len, 1)
 
         self.model_params.update(desc_dict)
 
-    def forward(self, atom_fea, nbr_fea, self_idx, nbr_idx, mask_idx, cry_idx):
+    def forward(self, atom_fea, nbr_fea, self_idx, nbr_idx, cry_idx):
         """
         Forward pass
 
@@ -100,10 +97,6 @@ class CrystalGraphPreNet(BaseModelClass):
         """
         crys_fea = self.node_nn(atom_fea, nbr_fea, self_idx, nbr_idx)
 
-        nodes = self.node_linear(crys_fea[mask_idx, :])
+        glob = self.global_linear(self.global_pool(crys_fea, cry_idx))
 
-        # glob = self.global_linear(self.global_pool(crys_fea, cry_idx))
-
-        return [nodes,]
-        # return [glob,]
-        # return [nodes, glob]
+        return [glob]
