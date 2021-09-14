@@ -1,29 +1,32 @@
 import os
+import numpy as np
 
 import torch
 from sklearn.model_selection import train_test_split as split
+from sklearn.metrics import r2_score
 
 from roost.roost.data import CompositionData, collate_batch
 from roost.roost.model import Roost
-from roost.utils import results_regression, train_ensemble
+from roost.utils import results_multitask, train_ensemble
 
 torch.manual_seed(0)  # ensure reproducible results
 
 
 def test_single_roost():
 
-    data_path = "data/datasets/expt-non-metals.csv"
-    fea_path = "data/embeddings/matscholar-embedding.json"
-    task = "regression"
-    loss = "L1"
+    data_path = "data/datasets/tests/roost-regression.csv"
+    fea_path = "data/el-embeddings/matscholar-embedding.json"
+    targets = ["Eg"]
+    tasks = ["regression"]
+    losses = ["L1"]
     robust = True
     model_name = "roost"
     elem_fea_len = 64
     n_graph = 3
-    ensemble = 1
+    ensemble = 2
     run_id = 1
     data_seed = 42
-    epochs = 10
+    epochs = 25
     log = False
     sample = 1
     test_size = 0.2
@@ -38,7 +41,10 @@ def test_single_roost():
     workers = 0
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    dataset = CompositionData(data_path=data_path, fea_path=fea_path, task=task)
+    task_dict = {k: v for k, v in zip(targets, tasks)}
+    loss_dict = {k: v for k, v in zip(targets, losses)}
+
+    dataset = CompositionData(data_path=data_path, fea_path=fea_path, task_dict=task_dict)
     n_targets = dataset.n_targets
     elem_emb_len = dataset.elem_emb_len
 
@@ -66,7 +72,6 @@ def test_single_roost():
     }
 
     setup_params = {
-        "loss": loss,
         "optim": optim,
         "learning_rate": learning_rate,
         "weight_decay": weight_decay,
@@ -81,7 +86,7 @@ def test_single_roost():
     }
 
     model_params = {
-        "task": task,
+        "task_dict": task_dict,
         "robust": robust,
         "n_targets": n_targets,
         "elem_emb_len": elem_emb_len,
@@ -93,7 +98,8 @@ def test_single_roost():
         "cry_heads": 3,
         "cry_gate": [256],
         "cry_msg": [256],
-        "out_hidden": [1024, 512, 256, 128, 64],
+        "trunk_hidden": [1024, 512],
+        "out_hidden": [256, 128, 64],
     }
 
     os.makedirs(f"models/{model_name}", exist_ok=True)
@@ -112,12 +118,13 @@ def test_single_roost():
         setup_params=setup_params,
         restart_params=restart_params,
         model_params=model_params,
+        loss_dict=loss_dict,
     )
 
     data_params["batch_size"] = 64 * batch_size  # faster model inference
     data_params["shuffle"] = False  # need fixed data order due to ensembling
 
-    r2, mae, rmse = results_regression(
+    results_dict = results_multitask(
         model_class=Roost,
         model_name=model_name,
         run_id=run_id,
@@ -125,14 +132,25 @@ def test_single_roost():
         test_set=test_set,
         data_params=data_params,
         robust=robust,
+        task_dict=task_dict,
         device=device,
         eval_type="checkpoint",
     )
 
-    assert r2 > 0.7
+    pred = results_dict["Eg"]["pred"]
+    target = results_dict["Eg"]["target"]
+
+    y_ens = np.mean(pred, axis=0)
+
+    mae = np.abs(target - y_ens).mean()
+    mse = np.square(target - y_ens).mean()
+    rmse = np.sqrt(mse)
+    r2 = r2_score(target, y_ens)
+
+    assert r2 > 0.75
     assert mae < 0.55
-    assert rmse < 0.83
-    # standard values after 10 epochs
-    # - R2 Score: 0.7017
-    # - MAE: 0.5470
-    # - RMSE: 0.8297
+    assert rmse < 0.75
+
+
+if __name__ == "__main__":
+    test_single_roost()

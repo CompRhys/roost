@@ -9,16 +9,16 @@ from roost.roost.model import Roost
 from roost.roost.data import CompositionData, collate_batch
 from roost.utils import (
     train_ensemble,
-    results_regression,
-    results_classification,
+    results_multitask
 )
 
 
 def main(
     data_path,
     fea_path,
-    task,
-    loss,
+    targets,
+    tasks,
+    losses,
     robust,
     model_name="roost",
     elem_fea_len=64,
@@ -48,11 +48,10 @@ def main(
     device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
     **kwargs,
 ):
+    assert len(targets) == len(tasks) == len(losses)
+
     assert evaluate or train, (
-        "No task given - Set at least one of 'train' or 'evaluate' kwargs as True"
-    )
-    assert task in ["regression", "classification"], (
-        "Only 'regression' or 'classification' allowed for 'task'"
+        "No action given - At least one of 'train' or 'evaluate' cli flags required"
     )
 
     if test_path:
@@ -75,7 +74,14 @@ def main(
         "Cannot fine-tune and" " transfer checkpoint(s) at the same time."
     )
 
-    dataset = CompositionData(data_path=data_path, fea_path=fea_path, task=task)
+    task_dict = {k: v for k, v in zip(targets, tasks)}
+    loss_dict = {k: v for k, v in zip(targets, losses)}
+
+    dataset = CompositionData(
+        data_path=data_path,
+        fea_path=fea_path,
+        task_dict=task_dict
+    )
     n_targets = dataset.n_targets
     elem_emb_len = dataset.elem_emb_len
 
@@ -85,7 +91,9 @@ def main(
         if test_path:
             print(f"using independent test set: {test_path}")
             test_set = CompositionData(
-                data_path=test_path, fea_path=fea_path, task=task
+                data_path=test_path,
+                fea_path=fea_path,
+                task_dict=task_dict
             )
             test_set = torch.utils.data.Subset(test_set, range(len(test_set)))
         elif test_size == 0.0:
@@ -100,7 +108,11 @@ def main(
     if train:
         if val_path:
             print(f"using independent validation set: {val_path}")
-            val_set = CompositionData(data_path=val_path, fea_path=fea_path, task=task)
+            val_set = CompositionData(
+                data_path=val_path,
+                fea_path=fea_path,
+                task_dict=task_dict
+            )
             val_set = torch.utils.data.Subset(val_set, range(len(val_set)))
         else:
             if val_size == 0.0 and evaluate:
@@ -130,13 +142,15 @@ def main(
     }
 
     setup_params = {
-        "loss": loss,
         "optim": optim,
         "learning_rate": learning_rate,
         "weight_decay": weight_decay,
         "momentum": momentum,
         "device": device,
     }
+
+    if resume:
+        resume = f"models/{model_name}/checkpoint-r{run_id}.pth.tar"
 
     restart_params = {
         "resume": resume,
@@ -145,7 +159,7 @@ def main(
     }
 
     model_params = {
-        "task": task,
+        "task_dict": task_dict,
         "robust": robust,
         "n_targets": n_targets,
         "elem_emb_len": elem_emb_len,
@@ -157,7 +171,8 @@ def main(
         "cry_heads": 3,
         "cry_gate": [256],
         "cry_msg": [256],
-        "out_hidden": [1024, 512, 256, 128, 64],
+        "trunk_hidden": [1024, 512],
+        "out_hidden": [256, 128, 64],
     }
 
     os.makedirs(f"models/{model_name}/", exist_ok=True)
@@ -166,6 +181,8 @@ def main(
         os.makedirs("runs/", exist_ok=True)
 
     os.makedirs("results/", exist_ok=True)
+
+    # TODO dump all args/kwargs to a file for reproducibility.
 
     if train:
         train_ensemble(
@@ -182,6 +199,7 @@ def main(
             setup_params=setup_params,
             restart_params=restart_params,
             model_params=model_params,
+            loss_dict=loss_dict,
         )
 
     if evaluate:
@@ -192,8 +210,7 @@ def main(
         }
         data_params.update(data_reset)
 
-        if task == "regression":
-            results_regression(
+        results_multitask(
                 model_class=Roost,
                 model_name=model_name,
                 run_id=run_id,
@@ -201,18 +218,7 @@ def main(
                 test_set=test_set,
                 data_params=data_params,
                 robust=robust,
-                device=device,
-                eval_type="checkpoint",
-            )
-        elif task == "classification":
-            results_classification(
-                model_class=Roost,
-                model_name=model_name,
-                run_id=run_id,
-                ensemble_folds=ensemble,
-                test_set=test_set,
-                data_params=data_params,
-                robust=robust,
+                task_dict=task_dict,
                 device=device,
                 eval_type="checkpoint",
             )
@@ -233,7 +239,7 @@ def input_parser():
     parser.add_argument(
         "--data-path",
         type=str,
-        default="data/datasets/expt-non-metals.csv",
+        default="data/datasets/roost/expt-non-metals.csv",
         metavar="PATH",
         help="Path to main data set/training set",
     )
@@ -270,7 +276,7 @@ def input_parser():
     parser.add_argument(
         "--fea-path",
         type=str,
-        default="data/embeddings/matscholar-embedding.json",
+        default="data/el-embeddings/matscholar-embedding.json",
         metavar="PATH",
         help="Element embedding feature path",
     )
@@ -306,6 +312,33 @@ def input_parser():
         help="Sub-sample the training set for learning curves",
     )
 
+    # task inputs
+    parser.add_argument(
+        "--targets",
+        nargs="*",
+        type=str,
+        metavar="STR",
+        help="Task types for targets",
+    )
+
+    parser.add_argument(
+        "--tasks",
+        nargs="*",
+        default=["regression"],
+        type=str,
+        metavar="STR",
+        help="Task types for targets",
+    )
+
+    parser.add_argument(
+        "--losses",
+        nargs="*",
+        default=["L1"],
+        type=str,
+        metavar="STR",
+        help="Loss function if regression (default: 'L1')",
+    )
+
     # optimiser inputs
     parser.add_argument(
         "--epochs",
@@ -313,13 +346,6 @@ def input_parser():
         type=int,
         metavar="INT",
         help="Number of training epochs to run (default: 100)",
-    )
-    parser.add_argument(
-        "--loss",
-        default="L1",
-        type=str,
-        metavar="STR",
-        help="Loss function if regression (default: 'L1')",
     )
     parser.add_argument(
         "--robust",
@@ -424,17 +450,6 @@ def input_parser():
     )
 
     # task type
-    task_group = parser.add_mutually_exclusive_group()
-    task_group.add_argument(
-        "--classification",
-        action="store_true",
-        help="Specifies a classification task"
-    )
-    task_group.add_argument(
-        "--regression",
-        action="store_true",
-        help="Specifies a regression task"
-    )
     parser.add_argument(
         "--evaluate",
         action="store_true",
@@ -460,15 +475,12 @@ def input_parser():
 
     args = parser.parse_args(sys.argv[1:])
 
+    assert all([i in ["regression", "classification"] for i in args.tasks]), (
+        "Only `regression` and `classification` are allowed as tasks"
+    )
+
     if args.model_name is None:
         args.model_name = f"{args.data_id}_s-{args.data_seed}_t-{args.sample}"
-
-    if args.regression:
-        args.task = "regression"
-    elif args.classification:
-        args.task = "classification"
-    else:
-        args.task = "regression"
 
     args.device = (
         torch.device("cuda")
