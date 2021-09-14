@@ -21,6 +21,3 @@ This is an experimental NLP embedding based on the data mining of definite compo
 ## Onehot
 
 This is a simple one-hot encoding for the elements
-
-
-
