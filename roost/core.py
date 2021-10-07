@@ -333,7 +333,7 @@ class BaseModelClass(nn.Module, ABC):
         self.eval()
 
         # disable output in non-tty (e.g. log files) https://git.io/JnBOi
-        for input_, targets, _, batch_ids in tqdm(
+        for input_, targets, *batch_ids in tqdm(
             generator, disable=True if not verbose else None
         ):
 
