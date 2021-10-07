@@ -630,4 +630,4 @@ def save_results_dict(ids, results_dict, model_name):
 
     df = pd.DataFrame({**ids, **results})
 
-    df.to_csv(index=False, path_or_buf=(f"results/multi_results_{model_name}.csv"))
+    df.to_csv(f"results/{model_name}.csv", index=False)

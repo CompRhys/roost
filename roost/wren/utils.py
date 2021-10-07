@@ -54,7 +54,6 @@ remove_digits = str.maketrans("", "", digits)
 AFLOW_EXECUTABLE = "~/bin/aflow"
 
 
-# %%
 def get_aflow_label_aflow(struct, aflow_executable=AFLOW_EXECUTABLE) -> str:
     """get aflow prototype label for pymatgen structure
 
