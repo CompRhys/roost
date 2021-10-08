@@ -11,6 +11,10 @@
 
 </h4>
 
+## NOTE
+
+Development is going to slowly be moved from this repository to the https://github.com/CompRhys/aviary repository. This repository will be restored to allow the paper results to be directly replicated and pre-trained models used in the paper will be shared to make it as easy as possible to replicate. This is to attempt to ensure that Roost hopefully becomes easier to use after I finish my PhD.
+
 ## Premise
 
 In materials discovery applications often we know the composition of trial materials but have little knowledge about the structure.
@@ -123,16 +127,6 @@ Work building-on/using-parts-of the code shared here:
 * Materials Representation and Transfer Learning for Multi-Property Prediction [[arXiv]](https://arxiv.org/abs/2106.02225)
 
 If you have used Roost in your work please contact me and I will add your paper here.
-
-## Wren
-
-`Wren` is like `Roost` but more targetted towards high-throughput materials screening using DFT. Instead of operating on the elements in a composition we now operate on the wyckoff positions in a crystal structure. This repository will likely be restructed in the future to place `Wren` and `Roost` on equal footing as part of an `aviary` for materials discovery.
-
-Rapid Discovery of Novel Materials by Coordinate-free Coarse Graining. [[arXiv](https://arxiv.org/abs/2106.11132)]
-
-## CGCNN
-
-The open-source implementation of `cgcnn` available [here](https://github.com/txie-93/cgcnn) provided significant initial inspiration for how to structure this code-base. in tribute we implement our own version of `cgcnn` that makes use of a list of lists construction to avoid the max neighbour limitation of the original implementation.
 
 ## Disclaimer
 
