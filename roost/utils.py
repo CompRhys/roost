@@ -439,14 +439,6 @@ def results_multitask(  # noqa: C901
 
             results_dict[name]["target"] = target
 
-    if print_results:
-        for name, task in task_dict.items():
-            print(f"\nTask: '{name}' on Test Set")
-            if task == "regression":
-                print_metrics_regression(**results_dict[name])
-            elif task == "classification":
-                print_metrics_classification(**results_dict[name])
-
     # TODO cleaner way to get identifier names
     if save_results:
         save_results_dict(
@@ -454,6 +446,14 @@ def results_multitask(  # noqa: C901
             results_dict,
             model_name,
         )
+
+    if print_results:
+        for name, task in task_dict.items():
+            print(f"\nTask: '{name}' on Test Set")
+            if task == "regression":
+                print_metrics_regression(**results_dict[name])
+            elif task == "classification":
+                print_metrics_classification(**results_dict[name])
 
     return results_dict
 
@@ -630,4 +630,8 @@ def save_results_dict(ids, results_dict, model_name):
 
     df = pd.DataFrame({**ids, **results})
 
-    df.to_csv(f"results/{model_name}.csv", index=False)
+    file_name = model_name.replace("/", "_")
+
+    csv_path = f"results/{model_name}.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"\nSaved model predictions to '{csv_path}'")
