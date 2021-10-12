@@ -219,17 +219,17 @@ def main(
         data_params.update(data_reset)
 
         results_multitask(
-                model_class=Wren,
-                model_name=model_name,
-                run_id=run_id,
-                ensemble_folds=ensemble,
-                test_set=test_set,
-                data_params=data_params,
-                robust=robust,
-                task_dict=task_dict,
-                device=device,
-                eval_type="checkpoint",
-            )
+            model_class=Wren,
+            model_name=model_name,
+            run_id=run_id,
+            ensemble_folds=ensemble,
+            test_set=test_set,
+            data_params=data_params,
+            robust=robust,
+            task_dict=task_dict,
+            device=device,
+            eval_type="checkpoint",
+        )
 
 
 def input_parser():

@@ -121,10 +121,15 @@ def main(
                 val_set = test_set
             elif val_size == 0.0:
                 val_set = None
+                msg = "Running without validation set."
+                if log:
+                    msg += " TensorBoard will not record validation metrics."
+                print(msg)
             else:
                 print(f"using {val_size} of training set as validation set")
+                test_size = val_size / (1 - test_size)
                 train_idx, val_idx = split(
-                    train_idx, random_state=data_seed, test_size=val_size / (1 - test_size),
+                    train_idx, random_state=data_seed, test_size=test_size
                 )
                 val_set = torch.utils.data.Subset(dataset, val_idx)
 
@@ -208,17 +213,17 @@ def main(
         data_params.update(data_reset)
 
         results_multitask(
-                model_class=Roost,
-                model_name=model_name,
-                run_id=run_id,
-                ensemble_folds=ensemble,
-                test_set=test_set,
-                data_params=data_params,
-                robust=robust,
-                task_dict=task_dict,
-                device=device,
-                eval_type="checkpoint",
-            )
+            model_class=Roost,
+            model_name=model_name,
+            run_id=run_id,
+            ensemble_folds=ensemble,
+            test_set=test_set,
+            data_params=data_params,
+            robust=robust,
+            task_dict=task_dict,
+            device=device,
+            eval_type="checkpoint",
+        )
 
 
 def input_parser():
