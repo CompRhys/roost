@@ -3,6 +3,8 @@
 ci:
   autoupdate_schedule: quarterly
 
+default_stages: [commit]
+
 repos:
   - repo: https://github.com/PyCQA/isort
     rev: 5.9.3
@@ -24,5 +26,13 @@ repos:
     rev: v4.0.1
     hooks:
       - id: end-of-file-fixer
-      - id: trailing-whitespace
+      - id: forbid-new-submodules
       - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.1.0
+    hooks:
+      - id: codespell
+        stages: [commit, commit-msg]
+        exclude_types: [csv, json]

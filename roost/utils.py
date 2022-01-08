@@ -630,8 +630,6 @@ def save_results_dict(ids, results_dict, model_name):
 
     df = pd.DataFrame({**ids, **results})
 
-    file_name = model_name.replace("/", "_")
-
     csv_path = f"results/{model_name}.csv"
     df.to_csv(csv_path, index=False)
     print(f"\nSaved model predictions to '{csv_path}'")

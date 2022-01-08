@@ -69,7 +69,7 @@ def main(
 
     if ensemble > 1 and (fine_tune or transfer):
         raise NotImplementedError(
-            "If training an ensemble with fine tuning or transfering"
+            "If training an ensemble with fine tuning or transferring"
             " options the models must be trained one by one using the"
             " run-id flag."
         )
@@ -255,10 +255,7 @@ def input_parser():
     )
     test_group = parser.add_mutually_exclusive_group()
     test_group.add_argument(
-        "--test-path",
-        type=str,
-        metavar="PATH",
-        help="Path to independent test set"
+        "--test-path", type=str, metavar="PATH", help="Path to independent test set"
     )
     test_group.add_argument(
         "--test-size",
@@ -468,10 +465,7 @@ def input_parser():
     # restart inputs
     use_group = parser.add_mutually_exclusive_group()
     use_group.add_argument(
-        "--fine-tune",
-        type=str,
-        metavar="PATH",
-        help="Checkpoint path for fine tuning"
+        "--fine-tune", type=str, metavar="PATH", help="Checkpoint path for fine tuning"
     )
     use_group.add_argument(
         "--transfer",
@@ -480,9 +474,7 @@ def input_parser():
         help="Checkpoint path for transfer learning",
     )
     use_group.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume from previous checkpoint"
+        "--resume", action="store_true", help="Resume from previous checkpoint"
     )
 
     # task type
@@ -491,22 +483,12 @@ def input_parser():
         action="store_true",
         help="Evaluate the model/ensemble",
     )
-    parser.add_argument(
-        "--train",
-        action="store_true",
-        help="Train the model/ensemble"
-    )
+    parser.add_argument("--train", action="store_true", help="Train the model/ensemble")
 
     # misc
+    parser.add_argument("--disable-cuda", action="store_true", help="Disable CUDA")
     parser.add_argument(
-        "--disable-cuda",
-        action="store_true",
-        help="Disable CUDA"
-    )
-    parser.add_argument(
-        "--log",
-        action="store_true",
-        help="Log training metrics to tensorboard"
+        "--log", action="store_true", help="Log training metrics to tensorboard"
     )
 
     args = parser.parse_args(sys.argv[1:])

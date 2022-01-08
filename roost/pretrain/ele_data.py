@@ -176,7 +176,7 @@ class CrystalGraphData(Dataset):
     # masked structures each epoch as this effectively expands the training set
     # @functools.lru_cache(maxsize=None)  # Cache loaded structures
     def __getitem__(self, idx):
-        # NOTE sites must be given in fractional co-ordinates
+        # NOTE sites must be given in fractional coordinates
         df_idx = self.df.iloc[idx]
         crystal = df_idx["Structure_obj"]
         cif_id, comp = df_idx[self.identifiers]
@@ -194,7 +194,7 @@ class CrystalGraphData(Dataset):
             ]
         )
 
-        # select atleast one site in the crystal to mask
+        # select at least one site in the crystal to mask
         mask_ids = np.sort(
             np.random.choice(
                 np.arange(crystal.num_sites, dtype=int),
@@ -370,8 +370,8 @@ def get_structure(cols):
     """Return pymatgen structure from lattice and sites cols"""
     cell, sites = cols
     cell, elems, coords = parse_cgcnn(cell, sites)
-    # NOTE getting primative structure before constructing graph
-    # significantly harms the performnace of this model.
+    # NOTE getting primitive structure before constructing graph
+    # significantly harms the performance of this model.
 
     crystal = Structure(lattice=cell, species=elems, coords=coords, to_unit_cell=True)
 

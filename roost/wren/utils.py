@@ -153,7 +153,7 @@ def get_aflow_label_from_spga(spga):
 
     # cannonicalise the possible wyckoff letter sequences
     elem_wyks = "_".join(elem_wyks)
-    cannonical = canonicalise_elem_wyks(elem_wyks, spg_no)
+    canonical = canonicalise_elem_wyks(elem_wyks, spg_no)
 
     # get pearson symbol
     cry_sys = spga.get_crystal_system()
@@ -165,7 +165,7 @@ def get_aflow_label_from_spga(spga):
     prototype_form = prototype_formula(spga._structure.composition)
 
     aflow_label = (
-        f"{prototype_form}_{pearson}_{spg_no}_{cannonical}:"
+        f"{prototype_form}_{pearson}_{spg_no}_{canonical}:"
         f"{spga._structure.composition.chemical_system}"
     )
 
@@ -214,9 +214,9 @@ def canonicalise_elem_wyks(elem_wyks, spg_no):
         scores.append(score)
         sorted_iso.append("_".join(sorted_el_wyks))
 
-    cannonical = sorted(zip(scores, sorted_iso), key=lambda x: (x[0], x[1]))[0][1]
+    canonical = sorted(zip(scores, sorted_iso), key=lambda x: (x[0], x[1]))[0][1]
 
-    return cannonical
+    return canonical
 
 
 def prototype_formula(composition) -> str:

@@ -95,9 +95,9 @@ class WyckoffData(Dataset):
             atom_fea: torch.Tensor shape (M, n_fea)
                 features of atoms in the material
             self_fea_idx: torch.Tensor shape (M*M, 1)
-                list of self indicies
+                list of self indices
             nbr_fea_idx: torch.Tensor shape (M*M, 1)
-                list of neighbour indicies
+                list of neighbour indices
             target: torch.Tensor shape (1,)
                 target value for material
             cry_id: torch.Tensor shape (1,)

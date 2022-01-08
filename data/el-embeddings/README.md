@@ -2,7 +2,7 @@
 
 ## CGCNN
 
-The following paper describes the details of the CGCNN framework, infomation about how the onehot atom embedding was constructed is availiable in the supplementary materials:
+The following paper describes the details of the CGCNN framework, information about how the one-hot atom embedding was constructed is available in the supplementary materials:
 
 [Crystal Graph Convolutional Neural Networks for an Accurate and Interpretable Prediction of Material Properties](https://link.aps.org/doi/10.1103/PhysRevLett.120.145301)
 
@@ -18,6 +18,6 @@ This is an experimental NLP embedding based on the data mining of definite compo
 
 [Unsupervised word embeddings capture latent knowledge from materials science literature](https://www.nature.com/articles/s41586-019-1335-8)
 
-## Onehot
+## One-hot
 
 This is a simple one-hot encoding for the elements
