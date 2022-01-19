@@ -3,7 +3,8 @@ name: Tests
 on:
   push:
     paths:
-      - '**.py' # only run workflow when source files changed
+      - '**.py'
+      - '.github/workflows/ci.yml'
   pull_request:
     paths:
       - '**.py'
@@ -16,7 +17,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
 
-      - name: Set up latest Python 3
+      - name: Setup Python
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
@@ -31,4 +32,4 @@ jobs:
 
       - name: Run Tests
         run: |
-          python -m pytest
+          pytest
