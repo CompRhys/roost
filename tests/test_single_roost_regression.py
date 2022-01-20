@@ -147,9 +147,9 @@ def test_single_roost():
     rmse = np.sqrt(mse)
     r2 = r2_score(target, y_ens)
 
-    assert r2 > 0.75
-    assert mae < 0.55
-    assert rmse < 0.75
+    assert r2 > 0.7
+    assert mae < 0.6
+    assert rmse < 0.8
 
 
 if __name__ == "__main__":
