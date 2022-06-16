@@ -11,9 +11,9 @@
 
 </h4>
 
-## NOTE
 
-Development is going to slowly be moved from this repository to the https://github.com/CompRhys/aviary repository. This repository will be restored to allow the paper results to be directly replicated and pre-trained models used in the paper will be shared to make it as easy as possible to replicate. This is to attempt to ensure that Roost hopefully becomes easier to use after I finish my PhD.
+<h2 align="center">:warning: UNSUPPORTED NOTICE :warning:</h2>
+Development has been moved from this repository to the https://github.com/CompRhys/aviary repository. 
 
 ## Premise
 
