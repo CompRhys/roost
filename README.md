@@ -13,7 +13,7 @@
 
 
 <h2 align="center">:warning: UNSUPPORTED NOTICE :warning:</h2>
-Development has been moved from this repository to the https://github.com/CompRhys/aviary repository. 
+Development has been moved from this repository to the https://github.com/CompRhys/aviary repository.
 
 ## Premise
 
